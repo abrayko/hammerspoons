@@ -1,215 +1,164 @@
 
-muteAlertId = nil
+local micMute={}
+micMute.__index = obj
+
+-- Metadata
+micMute.name = "MicMute"
+micMute.version = "1.0"
+micMute.author = "abrayko <abrayko@github.com>"
+micMute.license = "MIT - https://opensource.org/licenses/MIT"
 
 -- Clear the alert if exists to avoid notifications stacking
-local function clearMuteAlert()
-  if muteAlertId then
-    hs.alert.closeSpecific(muteAlertId)
+function micMute.clearMuteAlert()
+  if micMute.muteAlertId then
+    hs.alert.closeSpecific(micMute.muteAlertId)
   end
 end
 
 -- Hold the hotkey for Push To Talk
-local holdingToTalk = false
-local function pushToTalk()
-  holdingToTalk = true
+function micMute.pushToTalk()
+  micMute.holdingToTalk = true
   local audio = hs.audiodevice.defaultInputDevice()
   local muted = audio:inputMuted()
   if muted then
-    clearMuteAlert()
-    muteAlertId = hs.alert.showWithImage("Microphone on", iconMicOn:setSize({h=32, w=32}))
+    micMute.clearMuteAlert()
+    micMute.muteAlertId = hs.alert.showWithImage("Microphone on", micMute.iconMicOn:setSize({h=32, w=32}))
     audio:setInputMuted(false)
   end
 end
 
 -- Toggles the default microphone's mute state on hotkey release
 -- or performs PTT when holding down the hotkey
-local function toggleMuteOrPTT(isAlert)
+function micMute.toggleMuteOrPTT(isAlert)
   local audio = hs.audiodevice.defaultInputDevice()
   local muted = audio:inputMuted()
   local muting = not muted
-  if holdingToTalk then
-    holdingToTalk = false
+  if micMute.holdingToTalk then
+    micMute.holdingToTalk = false
     audio:setInputMuted(true)
     muting = true
   else
     audio:setInputMuted(muting)
   end
-  clearMuteAlert()
+  micMute.clearMuteAlert()
 	--speech = hs.speech.new()
   if muting then
     if isAlert then
-      muteAlertId = hs.alert.showWithImage("Microphone muted", iconMicRedOff:setSize({h=32, w=32}))
+      micMute.muteAlertId = hs.alert.showWithImage("Microphone muted", micMute.iconMicRedOff:setSize({h=32, w=32}))
     end
     audio:setInputVolume(0)
 		---speech:speak("mic off")
   else
     if isAlert then
-      muteAlertId = hs.alert.showWithImage("Microphone on", iconMicOn:setSize({h=32, w=32}))
+      micMute.muteAlertId = hs.alert.showWithImage("Microphone on", micMute.iconMicOn:setSize({h=32, w=32}))
     end
     audio:setInputVolume(100)
 		---speech:speak("mic on")
   end
 end
 
-local function toggleBykeys()
-  checkAndreinitWatchAudio()
-  toggleMuteOrPTT(true)
+function micMute.toggleBykeys()
+  micMute.checkAndreinitWatchAudio()
+  micMute.toggleMuteOrPTT(true)
 end
 
-local function watcherMenuClick()
-  checkAndreinitWatchAudio()
-  toggleMuteOrPTT(false)
+function micMute.watcherMenuClick()
+  micMute.checkAndreinitWatchAudio()
+  micMute.toggleMuteOrPTT(false)
 end
 
-local function setIcon(aud)
-  --log:d("audio device: " .. aud:uid())
+function micMute.setIcon(aud)
+  micMute.log:d("audio device: " .. aud:uid())
   local muted = aud:inputMuted()
   if muted then 
-    micmenu:setIcon(iconMicOff:setSize({h=20, w=20}), false)
+    micMute.micmenu:setIcon(micMute.iconMicOff:setSize({h=20, w=20}), false)
   else 
-    micmenu:setIcon(iconMicOn:setSize({h=20, w=20}), false)
+    micMute.micmenu:setIcon(micMute.iconMicOn:setSize({h=20, w=20}), false)
   end
 end 
 
 
 -- watch audiodevice events
-local function watcherAudio(uid, event, scope, el)
-  log.d("audio device: " .. uid)
-  log.d("event: " .. event)
+function micMute.watcherAudio(uid, event, scope, el)
+  micMute.log.d("audio device: " .. uid)
+  micMute.log.d("event: " .. event)
   if event == "gone" or event == "mute" then
     local aud = hs.audiodevice.defaultInputDevice()
     if aud:uid() == uid then
       -- замьютили или переключились на устройство по умолчанию
-      setIcon(aud)
+      micMute.setIcon(aud)
     else
       -- если устройство не по умолчанию, то прекращаем его слушать
       if aud:watcherIsRunning() then
-        aud:watcherStop()
+        micMute.watcherStop()
+        micMute.watcherCallback(nil)
       end
     end
   end
 end
 
 -- Init
-hs.console.clearConsole()
-log = hs.logger.new("micmute", "debug")
+function micMute.init()
+  hs.console.clearConsole()
+  micMute.log = hs.logger.new("MicMute", "debug")
+  micMute.log.d("init ")
 
-micmenu = hs.menubar.new(true, "MicMute")
-iconMicOn = hs.image.imageFromPath("./icons/micOn.svg")
-iconMicOff = hs.image.imageFromPath("./icons/micOffCircle.svg")
-iconMicRedOff = hs.image.imageFromPath("./icons/MicSlashCircleOffRed.svg")
-micmenu:setClickCallback(watcherMenuClick)
+  micMute.holdingToTalk = false
+  micMute.muteAlertId = nil
 
-local audio = hs.audiodevice.defaultInputDevice()
-setIcon(audio)
+  micMute.micmenu = hs.menubar.new(true, "MicMute")
+  micMute.iconMicOn = hs.image.imageFromPath("./icons/micOn.svg")
+  micMute.iconMicOff = hs.image.imageFromPath("./icons/micOffCircle.svg")
+  micMute.iconMicRedOff = hs.image.imageFromPath("./icons/MicSlashCircleOffRed.svg")
+  micMute.micmenu:setClickCallback(micMute.watcherMenuClick)
+  micMute.setIcon(hs.audiodevice.defaultInputDevice())
 
+  micMute.initWatchAudio()
+end
 
---devs = {}
-function initWatchAudio()
-  -- watch device event
-  --log.d("init audiodevice watchers")
-  --for i,dev in ipairs(hs.audiodevice.allInputDevices()) do
-  --  if dev.watcherCallback ~= nil then
-  --     log.df("Setting up watcher for audio device %s (UID %s)", dev:name(), dev:uid())
-  --     devs[dev:uid()]=dev:watcherCallback(watcherAudio)
-  --     devs[dev:uid()]:watcherStart()
-  --  else
-  --     log.w("Your version of Hammerspoon does not support audio device watchers - please upgrade")
-  --  end
-  --end
-  
+function micMute.initWatchAudio()
   -- watch system scope device change
   if not hs.audiodevice.watcher.isRunning() then
-    log.d("init system scope audiodevice watcher")
+    micMute.log.d("init system scope audiodevice watcher")
     hs.audiodevice.watcher.setCallback(function(event) 
-        log.d(event)
+        micMute.log.d(event)
         if string.find(event, "dIn ") then
-          log.d("reset icon")
+          micMute.log.d("reset icon")
+          micMute.checkAndreinitWatchAudio()
           local aud = hs.audiodevice.defaultInputDevice()
-          if not aud:watcherIsRunning() then
-            aud:watcherCallback(watcherAudio)
-            aud:watcherStart()
-          end
-          setIcon(aud)
-        --elseif string.find(event, "dev#") then
-        --  log.d("reset watch list")
-        --  stopAndInitWatchAudio()
+          micMute.setIcon(aud)
         end
       end
     )
     hs.audiodevice.watcher.start()
   end
+
+  --  watch system sleep/wake event
+  micMute.sysWatcher = hs.caffeinate.watcher.new(
+    function (event)
+      micMute.log.d(event)
+      if event ==	hs.caffeinate.watcher.systemDidWake then
+        micMute.checkAndreinitWatchAudio()
+      end
+    end 
+  )
+  micMute.sysWatcher:start()
 end
 
---function stopAndInitWatchAudio()
---  -- останавливаем всех
---  for i,v in ipairs(devs) do
---    if v ~= nil then
---      v:watcherStop()
---    end
---  end
---  devs = {}
---  initWatchAudio()
---end
-
-function checkAndreinitWatchAudio()
-  --if not next(devs) then
-  --  -- если список watcher'ов пуст, то инициализируем заново
-  --  devs = {}
-  --  initWatchAudio()
-  --else
-  --  needInit = false
-  --  -- проверяем, есть ли хоть один остановленный whatcher
-  --  for i,v in ipairs(devs) do
-  --    if v ~= nill and not v:watcherIsRunning() then
-  --      needInit = true
-  --      break
-  --    end
-  --  end
-  --  if needInit then
-  --    stopAndInitWatchAudio()
-  --    --aud = hs.audiodevice.defaultInputDevice()
-  --    --setIcon(aud)
-  --  end
-  --end
+function micMute.checkAndreinitWatchAudio()
   local aud = hs.audiodevice.defaultInputDevice()
   if not aud:watcherIsRunning() then
-    aud:watcherCallback(watcherAudio)
+    aud:watcherCallback(micMute.watcherAudio)
     aud:watcherStart()
   end
 end
 
---  watch system sleep/wake event
-sysWatcher = hs.caffeinate.watcher.new(
-  function (event)
-    log.d(event)
-    if event ==	hs.caffeinate.watcher.systemDidWake then
-      checkAndreinitWatchAudio()
-    end
-  end 
-)
-sysWatcher:start()
+micMute.init()
 
 
---hs.microphoneState(true)
-initWatchAudio()
-
-hs.hotkey.bind({"ctrl", "alt"}, "m", nil, toggleBykeys, pushToTalk)
-log.setLogLevel("warning")
-
+hs.hotkey.bind({"ctrl", "alt"}, "m", nil, micMute.toggleBykeys, micMute.pushToTalk)
 
 
 hs.console.clearConsole()
-log = hs.logger.new("micmute", "debug")
+micMute.log.setLogLevel("warning")
 
-
-
---[[
-local function watcherUrlMenuClick()
-  hs.urlevent.openURL("trueconf:///c/0031213894212@s3.trueconf.rt.ru#vcs&h=s3.trueconf.rt.ru")
-end
-urlmenu = hs.menubar.new(true, "UrlMenu")
-iconUrl = hs.image.imageFromPath("./icons/person conf.svg")
-urlmenu:setClickCallback(watcherUrlMenuClick)
-urlmenu:setIcon(iconUrl:setSize({h=20, w=20}), false)
-]]
